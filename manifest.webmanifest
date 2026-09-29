@@ -1,0 +1,14 @@
+{
+  "name": "Anachro",
+  "short_name": "Anachro",
+  "description": "Trouve l'objet qui n'a rien à faire là.",
+  "lang": "fr",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fff6e3",
+  "theme_color": "#fff6e3",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

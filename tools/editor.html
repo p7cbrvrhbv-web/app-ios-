@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Éditeur de niveaux Anachro</title>
+<style>
+  :root {
+    --bg: #f6efe2; --panel: #fffaf0; --ink: #2a1f14; --muted: #7a6650; --line: #e0d2b8;
+    --accent: #c1392b; --gold: #f2a51e; --ok: #22804a; --warn: #a15c00; --code: #1d2238; --code-ink: #f6e7c4;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; padding-inline: 16px; padding-block: 20px 40px; }
+  main { max-width: 980px; margin: 0 auto; display: grid; gap: 18px; }
+  h1 { margin: 0; font-size: 1.5rem; }
+  .lead { margin: 4px 0 0; color: var(--muted); max-width: 62ch; }
+  .layout { display: grid; grid-template-columns: minmax(0, 360px) minmax(0, 1fr); gap: 20px; align-items: start; }
+  @media (max-width: 720px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+  #stage { position: relative; width: 100%; max-width: 360px; aspect-ratio: 9 / 16; background: #1d2238 repeating-conic-gradient(#232946 0 25%, #1a1f36 0 50%) 0 0 / 24px 24px; border-radius: 12px; overflow: hidden; outline: none; cursor: crosshair; box-shadow: 0 6px 24px rgba(60,40,10,.25); }
+  #stage:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+  #stage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; user-select: none; }
+  #stage .empty { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: #c9c2ae; font-weight: 600; }
+  .ring { position: absolute; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; }
+  #ringTarget { border: 3px solid #39ff88; box-shadow: 0 0 0 2px rgba(0,0,0,.6); }
+  #ringSlop { border: 2px dashed rgba(255,255,255,.8); }
+  #dot { position: absolute; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: #39ff88; box-shadow: 0 0 0 1px #000; pointer-events: none; }
+  #stage.drag { outline: 3px dashed var(--gold); outline-offset: -6px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 14px; min-width: 0; }
+  .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+  label { display: grid; gap: 4px; font-weight: 700; font-size: .82rem; letter-spacing: .02em; color: var(--muted); }
+  input, select, textarea, button { font: inherit; }
+  input, select { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); }
+  input[type=range] { padding: 0; accent-color: var(--accent); }
+  input:focus-visible, select:focus-visible, button:focus-visible { outline: 3px solid var(--gold); outline-offset: 1px; }
+  .btn { padding: 10px 16px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; font-weight: 800; cursor: pointer; }
+  .btn.alt { background: #fff; color: var(--ink); border: 1px solid var(--line); }
+  .btns { display: flex; flex-wrap: wrap; gap: 10px; }
+  pre { margin: 0; padding: 14px; border-radius: 10px; background: var(--code); color: var(--code-ink); overflow-x: auto; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre; }
+  .note { margin: 0; padding: 10px 12px; border-radius: 8px; background: #fff3d6; color: var(--warn); font-weight: 600; }
+  .note[hidden] { display: none; }
+  .ok { color: var(--ok); font-weight: 700; }
+  ul.check { margin: 0; padding-left: 1.2em; color: var(--muted); }
+  ul.check li { margin: 3px 0; }
+  .hint { color: var(--muted); font-size: .85rem; margin: 0; }
+  #stage + .hint { margin-top: 12px; }
+  kbd { padding: 1px 6px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; background: #fff; font: 12px ui-monospace, monospace; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Éditeur de niveaux Anachro</h1>
+    <p class="lead">Dépose une image, clique sur l'intrus, règle le rayon de clic. L'outil affiche l'image recadrée exactement comme dans le jeu (portrait 9:16) et te donne l'entrée à coller dans <code>js/levels.js</code>.</p>
+  </header>
+
+  <div class="layout">
+    <div>
+      <div id="stage" tabindex="0" role="application" aria-label="Image du niveau : clique sur l'intrus">
+        <div class="empty" id="empty">Dépose une image ici<br>ou choisis un fichier</div>
+        <img id="img" alt="" hidden>
+        <div class="ring" id="ringSlop" hidden></div>
+        <div class="ring" id="ringTarget" hidden></div>
+        <div id="dot" hidden></div>
+      </div>
+      <p class="hint">Précision : sélectionne l'image puis utilise <kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> (1 unité, <kbd>Maj</kbd> = 10).</p>
+    </div>
+
+    <div class="panel">
+      <div class="row">
+        <label for="file">Image du niveau
+          <input id="file" type="file" accept="image/*">
+        </label>
+      </div>
+      <p class="note" id="ratioNote" hidden></p>
+
+      <div class="row">
+        <label for="id">Identifiant <input id="id" value="mon-niveau"></label>
+        <label for="era">Époque
+          <select id="era">
+            <option value="moyen-age">Moyen Âge</option>
+            <option value="egypte">Égypte des Pharaons</option>
+            <option value="usa-80">USA années 80</option>
+          </select>
+        </label>
+      </div>
+      <div class="row">
+        <label for="title">Titre du niveau <input id="title" value="Titre du niveau"></label>
+        <label for="object">Intrus <input id="object" value="Objet"></label>
+      </div>
+      <label for="fact">Texte affiché à la fin
+        <input id="fact" value="Objet — inventé en 20XX.">
+      </label>
+      <label for="path">Chemin de l'image dans le projet
+        <input id="path" value="levels/mon-niveau.jpg">
+      </label>
+
+      <div class="row">
+        <label for="x">x (0–900) <input id="x" type="number" min="0" max="900" value="450"></label>
+        <label for="y">y (0–1600) <input id="y" type="number" min="0" max="1600" value="800"></label>
+        <label for="r">Rayon r <input id="r" type="number" min="10" max="150" value="40"></label>
+      </div>
+      <label for="rr">Rayon de clic
+        <input id="rr" type="range" min="14" max="120" value="40">
+      </label>
+      <p class="hint">Cercle vert : zone qui valide le clic. Cercle pointillé : tolérance de doigt ajoutée par le jeu (environ 16 px à l'écran). Un intrus de la taille d'un pouce demande un rayon de 25 à 45.</p>
+
+      <pre id="out" aria-label="Entrée à coller dans levels.js"></pre>
+      <div class="btns">
+        <button class="btn" id="copy" type="button">Copier l'entrée</button>
+        <span class="ok" id="copied" role="status" aria-live="polite"></span>
+      </div>
+
+      <ul class="check">
+        <li>Un seul anachronisme dans toute l'image : zoome sur chaque zone.</li>
+        <li>L'intrus est visible sur un téléphone, sans zoom, pour qui le cherche.</li>
+        <li>Aucun texte, logo ni marque lisible.</li>
+        <li>Ensuite : placer l'image dans <code>levels/</code>, coller l'entrée dans <code>js/levels.js</code>, lancer <code>npm test</code>.</li>
+      </ul>
+    </div>
+  </div>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var W = 900, H = 1600, SLOP = 37; // 16 px de tolérance sur un écran de 390 px
+  var $ = function (id) { return document.getElementById(id); };
+  var stage = $('stage'), img = $('img'), ringT = $('ringTarget'), ringS = $('ringSlop'), dot = $('dot');
+  var st = { x: 450, y: 800, r: 40, placed: false };
+
+  function q(s) { return "'" + String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'"; }
+
+  function render() {
+    var ok = st.placed && !img.hidden;
+    [ringT, ringS, dot].forEach(function (n) { n.hidden = !ok; });
+    if (ok) {
+      var left = st.x / W * 100 + '%', top = st.y / H * 100 + '%';
+      [ringT, ringS, dot].forEach(function (n) { n.style.left = left; n.style.top = top; });
+      ringT.style.width = (st.r * 2 / W * 100) + '%';
+      ringS.style.width = ((st.r + SLOP) * 2 / W * 100) + '%';
+    }
+    $('x').value = st.x; $('y').value = st.y; $('r').value = st.r; $('rr').value = Math.min(120, Math.max(14, st.r));
+    $('out').textContent =
+      '{\n' +
+      '  id: ' + q($('id').value) + ', era: ' + q($('era').value) + ', title: ' + q($('title').value) + ',\n' +
+      '  image: ' + q($('path').value) + ',\n' +
+      '  target: { x: ' + st.x + ', y: ' + st.y + ', r: ' + st.r + ' },\n' +
+      '  object: ' + q($('object').value) + ',\n' +
+      '  fact: ' + q($('fact').value) + '\n' +
+      '},';
+  }
+
+  function place(clientX, clientY) {
+    var b = stage.getBoundingClientRect();
+    st.x = Math.max(0, Math.min(W, Math.round((clientX - b.left) / b.width * W)));
+    st.y = Math.max(0, Math.min(H, Math.round((clientY - b.top) / b.height * H)));
+    st.placed = true; render();
+  }
+
+  stage.addEventListener('click', function (e) { if (!img.hidden) { place(e.clientX, e.clientY); stage.focus(); } });
+  stage.addEventListener('keydown', function (e) {
+    var s = e.shiftKey ? 10 : 1, d = { ArrowLeft: [-s, 0], ArrowRight: [s, 0], ArrowUp: [0, -s], ArrowDown: [0, s] }[e.key];
+    if (!d || img.hidden) return;
+    e.preventDefault();
+    st.x = Math.max(0, Math.min(W, st.x + d[0])); st.y = Math.max(0, Math.min(H, st.y + d[1])); st.placed = true; render();
+  });
+
+  function load(file) {
+    if (!file || !/^image\//.test(file.type)) return;
+    var url = URL.createObjectURL(file);
+    img.onload = function () {
+      img.hidden = false; $('empty').hidden = true;
+      var ratio = img.naturalWidth / img.naturalHeight, diff = Math.abs(ratio - 9 / 16) / (9 / 16);
+      var note = $('ratioNote');
+      note.hidden = diff < 0.02;
+      note.textContent = 'Cette image fait ' + img.naturalWidth + ' × ' + img.naturalHeight + ' (pas du 9:16). Le jeu la recadre en « cover » : ce que tu vois ici est exactement ce que voit le joueur.';
+      if (img.naturalWidth < 800) { note.hidden = false; note.textContent += ' Résolution un peu faible : vise au moins 900 px de large.'; }
+      var base = file.name.replace(/\.[^.]+$/, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'niveau';
+      $('id').value = base; $('path').value = 'levels/' + base + '.jpg';
+      st.placed = false; render();
+    };
+    img.src = url;
+  }
+  $('file').addEventListener('change', function (e) { load(e.target.files[0]); });
+  ['dragenter', 'dragover'].forEach(function (t) { stage.addEventListener(t, function (e) { e.preventDefault(); stage.classList.add('drag'); }); });
+  ['dragleave', 'drop'].forEach(function (t) { stage.addEventListener(t, function (e) { e.preventDefault(); stage.classList.remove('drag'); }); });
+  stage.addEventListener('drop', function (e) { load(e.dataTransfer.files[0]); });
+
+  function num(id, min, max) { var v = Math.round(Number($(id).value)); return isNaN(v) ? null : Math.max(min, Math.min(max, v)); }
+  $('x').addEventListener('input', function () { var v = num('x', 0, W); if (v !== null) { st.x = v; st.placed = true; render(); } });
+  $('y').addEventListener('input', function () { var v = num('y', 0, H); if (v !== null) { st.y = v; st.placed = true; render(); } });
+  $('r').addEventListener('input', function () { var v = num('r', 10, 150); if (v !== null) { st.r = v; render(); } });
+  $('rr').addEventListener('input', function () { st.r = Number($('rr').value); render(); });
+  ['id', 'era', 'title', 'object', 'fact', 'path'].forEach(function (id) { $(id).addEventListener('input', render); });
+
+  $('copy').addEventListener('click', function () {
+    var text = $('out').textContent, done = function () { $('copied').textContent = 'Copié'; setTimeout(function () { $('copied').textContent = ''; }, 1800); };
+    var fallback = function () {
+      var r = document.createRange(); r.selectNodeContents($('out'));
+      var s = getSelection(); s.removeAllRanges(); s.addRange(r);
+      $('copied').textContent = 'Sélectionné : copie avec Ctrl/Cmd + C';
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

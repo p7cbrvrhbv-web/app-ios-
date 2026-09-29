@@ -1,0 +1,14 @@
+{
+  "name": "anachro",
+  "version": "0.1.0",
+  "description": "Anachro : trouve l'objet qui n'a rien à faire là. Prototype jouable (HTML/CSS/JS, sans dépendance).",
+  "private": true,
+  "scripts": {
+    "start": "npx serve .",
+    "test": "node tests/e2e.mjs",
+    "check-targets": "node tools/check-targets.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.0"
+  }
+}
